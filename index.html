@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEON CUBE PARKOUR - PC Aksesuar Güncellemesi</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080014;color:#fff;font-family:Arial,sans-serif}
+#stage{position:fixed;inset:0;background:#080014;display:flex;align-items:center;justify-content:center}
+canvas{display:block;width:min(100vw,166.6667vh);height:min(100vh,60vw);object-fit:contain;outline:none}
+#rotate{display:none}
+#controls{display:none;position:fixed;inset:0;pointer-events:none}
+.pad{position:absolute;bottom:max(8px,env(safe-area-inset-bottom));display:flex;gap:6px;pointer-events:auto}
+#move{left:8px}#action{right:8px}
+.ctrl{width:clamp(42px,6vw,54px);height:clamp(42px,6vw,54px);border-radius:14px;border:2px solid #00ffff;background:rgba(16,21,47,.18);color:white;font-size:clamp(18px,3vw,24px);font-weight:bold;box-shadow:0 0 8px #00ffff55;touch-action:none;opacity:.62}
+#jump{width:clamp(50px,7vw,62px);height:clamp(50px,7vw,62px);border-color:#ff00ff;background:rgba(35,8,45,.18);box-shadow:0 0 8px #ff00ff55;opacity:.68}
+@media(orientation:portrait){#controls{display:none}}
+@media(orientation:landscape){#controls{display:block}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c" width="1000" height="600" tabindex="0" aria-label="NEON CUBE PARKOUR oyun alanı"></canvas></div>
+<script>
+(()=>{
+const c=document.getElementById('c'),g=c.getContext('2d'),W=1000,H=600;
+let screen='menu',keys=new Set(),cubeColor='#00d9ff',trailColor='#00ffff';
+let accessoryHat='none',accessoryGlasses=false,accessoryEffect=false,accessoryHeadphones=false,accessoryDealWithIt=false;
+const COLORS=['#00d9ff','#ff00ff','#39ff14','#ffff00','#ff1744','#ffffff','#9d4edd','#ff8800'];
+const SIZE=35,GRAVITY=.8,JUMP=-15,SPEED=14;
+let px=100,py=450,vx=0,vy=0,ground=false,dead=false,camera=0,trails=[],platforms=[],spikes=[],lastX=1180,lastY=380,buttons=[],jumpBuffer=0;
+function reset(){
+ px=100;py=450;vx=0;vy=0;ground=false;dead=false;camera=0;trails=[];
+ platforms=[[0,520,400,580],[470,450,780,500],[850,380,1180,430]];
+ spikes=[[300,490],[600,420],[980,350]];lastX=1180;lastY=380;keys.clear();jumpBuffer=0;
+}
+function world(){
+ while(lastX<px+2500){
+  const gap=95+Math.floor(Math.random()*91),x1=lastX+gap,w=170+Math.floor(Math.random()*151);
+  let y=lastY+Math.floor(Math.random()*141)-70;y=Math.max(290,Math.min(510,y));let x2=x1+w;
+  platforms.push([x1,y,x2,y+50]);
+  if(Math.random()<.48)spikes.push([x1+Math.floor(w/2),y-30]);
+  lastX=x2;lastY=y;
+ }
+ platforms=platforms.filter(p=>p[2]>camera-1000);spikes=spikes.filter(s=>s[0]>camera-1000);
+}
+function rect(x,y,w,h,fill,stroke=null,lw=1){g.fillStyle=fill;g.fillRect(x,y,w,h);if(stroke){g.strokeStyle=stroke;g.lineWidth=lw;g.strokeRect(x,y,w,h)}}
+function txt(s,x,y,size,color,align='center'){g.fillStyle=color;g.font='bold '+size+'px Arial';g.textAlign=align;g.fillText(s,x,y)}
+function bg(){rect(0,0,W,H,'#080014');let off=Math.floor(camera)%40;for(let x=-40-off;x<W+40;x+=40){g.strokeStyle='#24104a';g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke()}for(let y=0;y<H;y+=40){g.strokeStyle='#24104a';g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}}
+function button(label,x,y,w,h,fn,color='#00ffff'){rect(x,y,w,h,'#10152f',color,3);txt(label,x+w/2,y+h/2+8,22,color);buttons.push({x,y,w,h,fn})}
+function drawMenu(){bg();txt('NEON CUBE',500,85,55,'#00ffff');txt('PARKOUR',500,140,38,'#ff00ff');drawCubePreview(482,165,36);button('OYNA',350,255,300,58,()=>{screen='game';reset()});button('AYARLAR',350,330,300,48,()=>screen='settings','#ff00ff');button('AKSESUARLAR',350,390,300,52,()=>screen='accessories','#39ff14');txt('∞ SONSUZ NEON PARKUR ∞',500,500,17,'#bbbbff')}
+function drawCubePreview(x,y,size){rect(x,y,size,size,cubeColor,'white',2);rect(x+8,y+10,5,5,'white');rect(x+size-13,y+10,5,5,'white');if(accessoryHat==='cap'){rect(x-3,y-7,size+6,8,'#ff00ff','#ffffff',1);rect(x+5,y-15,size-10,10,'#ff00ff','#ffffff',1)}else if(accessoryHat==='crown'){g.fillStyle='#ffff00';g.beginPath();g.moveTo(x+2,y);g.lineTo(x+3,y-12);g.lineTo(x+12,y-5);g.lineTo(x+size/2,y-15);g.lineTo(x+size-12,y-5);g.lineTo(x+size-3,y-12);g.lineTo(x+size-2,y);g.closePath();g.fill()}if(accessoryHeadphones){g.save();g.strokeStyle='#20202a';g.lineWidth=Math.max(3,size*.12);g.beginPath();g.arc(x+size/2,y+size*.15,size*.43,Math.PI,Math.PI*2);g.stroke();rect(x-3,y+size*.2,7,size*.38,'#22222a','#00ffff',1);rect(x+size-4,y+size*.2,7,size*.38,'#22222a','#00ffff',1);g.restore()}if(accessoryDealWithIt){drawDealWithIt(x,y,size)}else if(accessoryGlasses){rect(x+4,y+9,size-8,7,'#111111','#00ffff',1);rect(x+5,y+10,9,4,'#00ffff');rect(x+size-14,y+10,9,4,'#00ffff')}if(accessoryEffect){g.save();g.strokeStyle=trailColor;g.lineWidth=2;g.shadowBlur=12;g.shadowColor=trailColor;g.beginPath();g.arc(x+size/2,y+size/2,size/2+8,0,Math.PI*2);g.stroke();g.restore()}}
+function drawDealWithIt(x,y,size){
+ // Deal With It: orijinal memedeki gibi büyük, keskin ve bloklu piksel gözlük.
+ const u=size/35;
+ g.save();
+ g.translate(x,y);
+ g.scale(u,u);
+ // Kalın, düz üst bant ve basamaklı siyah camlar.
+ g.fillStyle='#050505';
+ g.fillRect(-2,5,39,5);
+ g.fillRect(0,10,35,5);
+ // Sol camın aşağı inen basamakları
+ g.fillRect(1,10,14,5);
+ g.fillRect(2,15,13,5);
+ g.fillRect(4,20,10,4);
+ // Sağ camın aşağı inen basamakları
+ g.fillRect(20,10,14,5);
+ g.fillRect(20,15,13,5);
+ g.fillRect(21,20,10,4);
+ // Burun köprüsü: ortada gözlük formunu belirgin tutan üst bağlantı
+ g.fillRect(14,10,7,3);
+ // Beyaz dama/parlama kareleri — piksel piksel, yumuşatma yok.
+ const px=(cx,cy,w=4,h=4)=>{g.fillStyle='#ffffff';g.fillRect(cx,cy,w,h)};
+ px(2,10,4,4); px(8,10,4,4);
+ px(4,14,4,4); px(10,14,4,4); px(12,18,4,4);
+ px(21,10,4,4); px(27,10,4,4);
+ px(23,14,4,4); px(29,14,4,4); px(21,18,4,4); px(27,18,4,4);
+ // Dış kenarların basamaklı bitişi
+ g.fillStyle='#050505';
+ g.fillRect(-2,5,4,5); g.fillRect(35,5,4,5);
+ g.restore();
+}
+function drawAccessories(){bg();txt('AKSESUARLAR',500,42,34,'#39ff14');drawCubePreview(482,58,36);txt('ŞAPKA',500,145,17,'#ffff00');button((accessoryHat==='none'?'✓ ':'')+'YOK',245,157,150,38,()=>{accessoryHat='none'});button((accessoryHat==='cap'?'✓ ':'')+'NEON ŞAPKA',425,157,165,38,()=>{accessoryHat='cap'},'#ff00ff');button((accessoryHat==='crown'?'✓ ':'')+'KRAL TACI',620,157,150,38,()=>{accessoryHat='crown'},'#ffff00');txt('GÖZLÜK',500,220,17,'#00ffff');button((!accessoryGlasses?'✓ ':'')+'YOK',330,232,150,38,()=>{accessoryGlasses=false});button((accessoryGlasses?'✓ ':'')+'NEON GÖZLÜK',510,232,190,38,()=>{accessoryGlasses=true;accessoryDealWithIt=false},'#00ffff');txt('KULAKLIK',500,295,17,'#00ffff');button((!accessoryHeadphones?'✓ ':'')+'YOK',330,307,150,38,()=>{accessoryHeadphones=false});button((accessoryHeadphones?'✓ ':'')+'NEON KULAKLIK',510,307,190,38,()=>{accessoryHeadphones=!accessoryHeadphones},'#00ffff');txt('DEAL WITH IT',500,370,17,'#ffffff');button((!accessoryDealWithIt?'✓ ':'')+'YOK',330,382,150,38,()=>{accessoryDealWithIt=false});button((accessoryDealWithIt?'✓ TAKILI':'TAK'),510,382,190,38,()=>{accessoryDealWithIt=!accessoryDealWithIt;if(accessoryDealWithIt)accessoryGlasses=false},'#ffffff');txt('EFEKT HALKASI',500,445,17,'#ff00ff');button((accessoryEffect?'✓ AÇIK':'KAPALI'),405,457,190,38,()=>{accessoryEffect=!accessoryEffect},'#ff00ff');button('GERİ',400,520,200,45,()=>screen='menu')}
+function drawSettings(){bg();txt('AYARLAR',500,80,40,'#ff00ff');txt('KÜP RENGİ SEÇ',500,140,20,'#ffff00');COLORS.forEach((col,i)=>{let x=265+i*62;rect(x,160,42,38,col,col===cubeColor?'white':'#5a477a',col===cubeColor?4:1);buttons.push({x,y:160,w:42,h:38,fn:()=>{cubeColor=col;screen='settings'}})});txt('NEON İZ RENGİ SEÇ',500,250,20,'#ff00ff');COLORS.forEach((col,i)=>{let x=265+i*62;rect(x,270,42,38,col,col===trailColor?'white':'#5a477a',col===trailColor?4:1);buttons.push({x,y:270,w:42,h:38,fn:()=>{trailColor=col;screen='settings'}})});txt('HAREKET: A/D veya ok tuşları • ZIPLA: SPACE / W / ↑',500,365,17,'white');txt('Hız: '+SPEED,500,405,18,'#00ffff');button('GERİ',400,470,200,55,()=>screen='menu')}
+function drawPlatform(p){let x1=p[0]-camera,x2=p[2]-camera,y1=p[1],y2=p[3];if(x2< -100||x1>1100)return;rect(x1-5,y1-5,x2-x1+10,y2-y1+10,'#15174a','#7a00ff',3);rect(x1,y1,x2-x1,y2-y1,'#10152f','#00ffff',3);rect(x1,y1,x2-x1,4,'#00ffff')}
+function drawPlayer(){let x=px-camera;g.save();g.shadowBlur=14;g.shadowColor=cubeColor;if(accessoryEffect){g.strokeStyle=trailColor;g.lineWidth=2;g.beginPath();g.arc(x+SIZE/2,py+SIZE/2,SIZE/2+10,0,Math.PI*2);g.stroke()}rect(x-7,py-7,SIZE+14,SIZE+14,'#080014',cubeColor,3);rect(x,py,SIZE,SIZE,cubeColor,'white',2);rect(x+8,py+9,5,5,'white');rect(x+22,py+9,5,5,'white');if(accessoryHat==='cap'){rect(x-3,py-8,SIZE+6,7,'#ff00ff','#ffffff',1);rect(x+5,py-15,SIZE-10,9,'#ff00ff','#ffffff',1)}else if(accessoryHat==='crown'){g.fillStyle='#ffff00';g.beginPath();g.moveTo(x+2,py);g.lineTo(x+3,py-12);g.lineTo(x+12,py-5);g.lineTo(x+SIZE/2,py-15);g.lineTo(x+SIZE-12,py-5);g.lineTo(x+SIZE-3,py-12);g.lineTo(x+SIZE-2,py);g.closePath();g.fill()}if(accessoryHeadphones){g.save();g.strokeStyle='#20202a';g.lineWidth=5;g.beginPath();g.arc(x+SIZE/2,py+5,SIZE*.43,Math.PI,Math.PI*2);g.stroke();rect(x-4,py+5,9,14,'#22222a','#00ffff',1);rect(x+SIZE-5,py+5,9,14,'#22222a','#00ffff',1);g.restore()}if(accessoryDealWithIt){drawDealWithIt(x,py,SIZE)}else if(accessoryGlasses){rect(x+4,py+9,SIZE-8,7,'#111111','#00ffff',1);rect(x+5,py+10,9,4,'#00ffff');rect(x+SIZE-14,py+10,9,4,'#00ffff')}g.restore()}
+function drawGame(){
+ bg();platforms.forEach(drawPlatform);
+ spikes.forEach(([x,y])=>{let sx=x-camera;if(sx< -100||sx>1100)return;g.fillStyle='#ff1744';g.strokeStyle='#ff80ab';g.lineWidth=2;g.beginPath();g.moveTo(sx,y+30);g.lineTo(sx+15,y);g.lineTo(sx+30,y+30);g.closePath();g.fill();g.stroke()});
+ trails.forEach(([x,y,life])=>{if(life<=0)return;let size=30*life/15;g.globalAlpha=life/15;g.shadowBlur=12;g.shadowColor=trailColor;rect(x-camera-4,y-4,size+8,size+8,'#073c52',trailColor,2);rect(x-camera,y,size,size,trailColor);g.globalAlpha=1;g.shadowBlur=0});
+ drawPlayer();txt('NEON CUBE PARKOUR',20,28,20,'#00ffff','left');txt('MESAFE: '+Math.max(0,Math.floor((px-100)/10))+' m',20,54,15,'#ff00ff','left');
+ button('LOBİYE DÖN',820,18,160,42,()=>screen='menu','#ff00ff');
+ if(dead){rect(0,0,W,H,'#080014cc');txt('KAYBETTİN!',500,250,50,'#ff1744');button('TEKRAR OYNA',390,335,220,55,reset);button('LOBİYE DÖN',390,410,220,55,()=>screen='menu','#ff00ff')}
+}
+function update(){
+ if(screen==='game'&&!dead){
+  vx=0;if(keys.has('a')||keys.has('arrowleft')||keys.has('left'))vx=-SPEED;if(keys.has('d')||keys.has('arrowright')||keys.has('right'))vx=SPEED;
+  px+=vx;
+  if(vx!==0)trails.push([vx>0?px-28:px+SIZE+3,py+5,15]);
+  trails=trails.map(t=>[t[0],t[1],t[2]-1]).filter(t=>t[2]>0).slice(-20);
+  vy+=GRAVITY;py+=vy;ground=false;
+  for(const p of platforms){if(px+SIZE>p[0]&&px<p[2]&&py+SIZE>=p[1]&&py+SIZE<=p[1]+25&&vy>=0){py=p[1]-SIZE;vy=0;ground=true}}
+  if((jumpBuffer>0||keys.has('space')||keys.has('w')||keys.has('arrowup')||keys.has('jump'))&&ground){vy=JUMP;ground=false;jumpBuffer=0;keys.delete('space');keys.delete('w');keys.delete('arrowup');keys.delete('jump')}else if(jumpBuffer>0){jumpBuffer--;}
+  for(const [x,y] of spikes)if(px+SIZE>x&&px<x+30&&py+SIZE>y&&py<y+30)dead=true;
+  if(py>650)dead=true;
+  world();camera+=(Math.max(0,px-250)-camera)*.15;
+ }
+ buttons=[];if(screen==='menu')drawMenu();else if(screen==='settings')drawSettings();else if(screen==='accessories')drawAccessories();else drawGame();
+ requestAnimationFrame(update)
+}
+function point(e){let r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
+async function requestLandscape(){try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock('landscape')}catch(err){/* Browser may only allow orientation lock in an installed app. */}}
+c.addEventListener('pointerdown',e=>{e.preventDefault();c.focus({preventScroll:true});let p=point(e);for(let i=buttons.length-1;i>=0;i--){let b=buttons[i];if(p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){b.fn();break}}});
+function pressJump(){if(screen==='game'&&!dead&&ground){vy=JUMP;ground=false;jumpBuffer=0;}else{jumpBuffer=30;}}
+document.addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['a','d','arrowleft','arrowright','arrowup','arrowdown',' ','w','r','escape'].includes(k))e.preventDefault();keys.add(k);if([' ','w','arrowup'].includes(k)){pressJump();}if(k==='r'&&screen==='game')reset();if(k==='escape')screen='menu';},{passive:false});
+document.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',()=>{keys.clear()});
+function hold(id,k){let el=document.getElementById(id);el.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(k);if(k==='jump')pressJump();el.setPointerCapture?.(e.pointerId)});for(let ev of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(ev,e=>{e.preventDefault();keys.delete(k)})}
+
+reset();requestAnimationFrame(update);
+})();
+</script>
+</body>
+</html>
